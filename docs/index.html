@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ประกาศผลการเรียนกลางภาค</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: #4f46e5;
+    --primary-dark: #3730a3;
+    --bg: #f1f5f9;
+    --card: #ffffff;
+    --text: #1e293b;
+    --muted: #64748b;
+    --border: #e2e8f0;
+    --green: #16a34a;
+    --amber: #d97706;
+    --red: #dc2626;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Sarabun', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  .hero {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    text-align: center;
+    padding: 32px 16px 72px;
+  }
+  .hero .school { font-size: 0.95rem; opacity: 0.85; }
+  .hero h1 { font-size: 1.5rem; font-weight: 700; margin-top: 4px; }
+  .hero .term { font-size: 0.9rem; opacity: 0.9; margin-top: 6px; }
+  .container { max-width: 640px; margin: -48px auto 0; padding: 0 16px 48px; }
+  .card {
+    background: var(--card);
+    border-radius: 16px;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  label { font-weight: 600; font-size: 0.95rem; display: block; margin-bottom: 8px; }
+  .search-row { display: flex; gap: 8px; }
+  input[type="tel"] {
+    flex: 1;
+    min-width: 0;
+    font-family: inherit;
+    font-size: 1.1rem;
+    letter-spacing: 2px;
+    padding: 12px 14px;
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input[type="tel"]:focus { border-color: var(--primary); }
+  button {
+    font-family: inherit;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #fff;
+    background: var(--primary);
+    border: none;
+    border-radius: 12px;
+    padding: 12px 20px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  button:hover { background: var(--primary-dark); }
+  button:disabled { background: #a5b4fc; cursor: wait; }
+  .hint { font-size: 0.8rem; color: var(--muted); margin-top: 8px; }
+  .msg {
+    display: none;
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-size: 0.95rem;
+    margin-bottom: 16px;
+  }
+  .msg.error { display: block; background: #fef2f2; color: var(--red); border: 1px solid #fecaca; }
+  #result { display: none; }
+  .student-info { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+  .student-info .full { grid-column: 1 / -1; }
+  .student-info .k { font-size: 0.78rem; color: var(--muted); }
+  .student-info .v { font-weight: 600; font-size: 1rem; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th {
+    background: #eef2ff;
+    color: var(--primary-dark);
+    font-weight: 600;
+    padding: 10px 8px;
+    text-align: left;
+    white-space: nowrap;
+  }
+  th.num, td.num { text-align: right; }
+  td { padding: 10px 8px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  .subj-code { font-size: 0.75rem; color: var(--muted); }
+  .pct { font-weight: 700; }
+  .pct.good { color: var(--green); }
+  .pct.mid { color: var(--amber); }
+  .pct.low { color: var(--red); }
+  tfoot td { font-weight: 700; background: #f8fafc; border-top: 2px solid var(--border); }
+  .card h2 { font-size: 1.05rem; margin-bottom: 14px; color: var(--primary-dark); }
+  .footer-note { text-align: center; font-size: 0.78rem; color: var(--muted); }
+  .spinner {
+    display: none;
+    margin: 8px auto 0;
+    width: 22px; height: 22px;
+    border: 3px solid var(--border);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (max-width: 420px) {
+    .search-row { flex-direction: column; }
+    button { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="school">โรงเรียนตัวอย่างวิทยา</div>
+  <h1>ประกาศผลการเรียนกลางภาค</h1>
+  <div class="term" id="termLabel">ภาคเรียนที่ 1 ปีการศึกษา 2569</div>
+</div>
+
+<div class="container">
+  <div class="card">
+    <label for="cid">ค้นหาด้วยเลขบัตรประชาชน 13 หลัก</label>
+    <div class="search-row">
+      <input type="tel" id="cid" inputmode="numeric" maxlength="13" placeholder="เช่น 1234567890121" autocomplete="off">
+      <button id="btnSearch">ค้นหา</button>
+    </div>
+    <div class="hint">ระบบจะแสดงเฉพาะผลการเรียนของเจ้าของเลขบัตรเท่านั้น</div>
+    <div class="spinner" id="spinner"></div>
+  </div>
+
+  <div class="msg error" id="msgError"></div>
+
+  <div id="result">
+    <div class="card">
+      <h2>ข้อมูลนักเรียน</h2>
+      <div class="student-info">
+        <div class="full"><div class="k">ชื่อ-นามสกุล</div><div class="v" id="stName">-</div></div>
+        <div><div class="k">เลขประจำตัวนักเรียน</div><div class="v" id="stId">-</div></div>
+        <div><div class="k">ชั้น / เลขที่</div><div class="v" id="stClass">-</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>ผลคะแนนกลางภาค</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>รายวิชา</th>
+              <th class="num">เต็ม</th>
+              <th class="num">ได้</th>
+              <th class="num">ร้อยละ</th>
+            </tr>
+          </thead>
+          <tbody id="gradeRows"></tbody>
+          <tfoot>
+            <tr>
+              <td>รวม</td>
+              <td class="num" id="sumMax">0</td>
+              <td class="num" id="sumScore">0</td>
+              <td class="num" id="sumPct">0%</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-note">หากข้อมูลไม่ถูกต้อง กรุณาติดต่อครูประจำวิชา / ฝ่ายวัดผล</div>
+</div>
+
+<script>
+const API_BASE = ["localhost", "127.0.0.1"].includes(location.hostname)
+  ? "http://localhost:8787"
+  : "https://midterm-results-api.YOUR-SUBDOMAIN.workers.dev"; // แก้เป็น URL Worker จริงหลัง deploy
+
+const $ = (id) => document.getElementById(id);
+
+function pctClass(p) {
+  if (p >= 70) return "good";
+  if (p >= 50) return "mid";
+  return "low";
+}
+
+async function search() {
+  const cid = $("cid").value.trim();
+  $("msgError").style.display = "none";
+  $("result").style.display = "none";
+
+  if (!/^\d{13}$/.test(cid)) {
+    $("msgError").textContent = "กรุณากรอกเลขบัตรประชาชนให้ครบ 13 หลัก (ตัวเลขเท่านั้น)";
+    $("msgError").style.display = "block";
+    return;
+  }
+
+  $("btnSearch").disabled = true;
+  $("spinner").style.display = "block";
+
+  try {
+    const res = await fetch(`${API_BASE}/api/results?cid=${cid}`);
+    const data = await res.json();
+
+    if (!res.ok) {
+      $("msgError").textContent = data.error || "เกิดข้อผิดพลาด กรุณาลองใหม่";
+      $("msgError").style.display = "block";
+      return;
+    }
+
+    $("termLabel").textContent = data.term_label;
+    const s = data.student;
+    $("stName").textContent = `${s.prefix || ""}${s.first_name} ${s.last_name}`;
+    $("stId").textContent = s.student_id || "-";
+    $("stClass").textContent = `${s.class || "-"} / เลขที่ ${s.class_no ?? "-"}`;
+
+    let sumScore = 0, sumMax = 0;
+    $("gradeRows").innerHTML = data.grades.map((g) => {
+      const score = g.midterm_score ?? 0;
+      const max = g.max_score ?? 100;
+      sumScore += score; sumMax += max;
+      const pct = max > 0 ? (score / max) * 100 : 0;
+      return `<tr>
+        <td>${g.subject_name}<div class="subj-code">${g.subject_code || ""}</div></td>
+        <td class="num">${max}</td>
+        <td class="num">${score}</td>
+        <td class="num pct ${pctClass(pct)}">${pct.toFixed(1)}%</td>
+      </tr>`;
+    }).join("");
+
+    $("sumMax").textContent = sumMax;
+    $("sumScore").textContent = sumScore;
+    const totalPct = sumMax > 0 ? (sumScore / sumMax) * 100 : 0;
+    $("sumPct").textContent = totalPct.toFixed(1) + "%";
+
+    $("result").style.display = "block";
+  } catch (e) {
+    $("msgError").textContent = "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาลองใหม่ภายหลัง";
+    $("msgError").style.display = "block";
+  } finally {
+    $("btnSearch").disabled = false;
+    $("spinner").style.display = "none";
+  }
+}
+
+$("btnSearch").addEventListener("click", search);
+$("cid").addEventListener("keydown", (e) => { if (e.key === "Enter") search(); });
+$("cid").addEventListener("input", () => {
+  $("cid").value = $("cid").value.replace(/\D/g, "").slice(0, 13);
+});
+</script>
+</body>
+</html>
