@@ -24,7 +24,21 @@ npx wrangler deploy         # จะได้ URL เช่น https://midterm-r
 แนะนำ: หลังได้ URL GitHub Pages แล้ว แก้ `worker/wrangler.toml` ให้
 `ALLOWED_ORIGIN = "https://entclick88.github.io"` แล้ว deploy ซ้ำ เพื่อจำกัดไม่ให้เว็บอื่นเรียก API
 
-## นำเข้าข้อมูลคะแนนจาก Excel
+## นำเข้าข้อมูลคะแนนจากไฟล์ "นำส่งข้อมูลเข้าเว็บ" (แนะนำ)
+
+ใช้กับไฟล์ Excel โครงสร้างของงานวัดผลโดยตรง (ชีต M1–M6, วิชาละ 4 คอลัมน์:
+เต็ม/ได้/งานค้าง/%เข้าเรียน) — ต้องมีคอลัมน์ **เลขประจำตัวประชาชน** กรอกครบทุกคน
+
+```powershell
+cd import
+python convert_xlsx.py "ไฟล์นำส่งข้อมูล.xlsx"   # ตรวจสอบ + สร้าง import.sql
+cd ../worker
+npx wrangler d1 execute midterm-results-db --remote --file=../import/import.sql
+```
+
+ถ้าเลขบัตรยังไม่ครบ/ซ้ำ/ผิด สคริปต์จะรายงานรายคนและไม่สร้าง SQL ให้
+
+## นำเข้าจาก CSV (ทางเลือก)
 
 1. จัดข้อมูลใน Excel ตามคอลัมน์ใน `import/template.csv` (1 แถว = นักเรียน 1 คน × 1 วิชา)
 2. Save As → **CSV UTF-8 (Comma delimited)** เช่น `grades.csv` ไว้ในโฟลเดอร์ `import/`
