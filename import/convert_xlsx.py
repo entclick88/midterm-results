@@ -156,9 +156,11 @@ def parse_sheet(ws):
 
         for s in subjects:
             c = s["col"]
-            full, got, pend, att = r[c], r[c + 1], r[c + 2], r[c + 3]
-            if full is None and (got is None or got == 0):
-                continue  # ไม่ได้เรียนวิชานี้
+            nb = lambda v: None if (v is None or (isinstance(v, str) and v.strip() == "")) else v
+            full, got, pend, att = nb(r[c]), nb(r[c + 1]), nb(r[c + 2]), nb(r[c + 3])
+            # ช่องคะแนน (ได้) ว่าง = นักเรียนไม่ได้ลงเรียนวิชานี้ → ตัดออก (0 คือคะแนนจริง ไม่ตัด)
+            if got is None or full is None:
+                continue
             grades.append({
                 "cid": cid, "code": s["code"], "name": s["name"], "credits": s["credits"],
                 "score": got, "max": full, "pend": pend, "att": att, "teacher": s["teacher"],
