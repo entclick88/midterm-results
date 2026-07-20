@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 
 INSERT OR REPLACE INTO settings (key, value) VALUES
-  ('term_label', 'ผลการเรียนกลางภาค ภาคเรียนที่ 2 ปีการศึกษา 2568'),
+  ('term_label', 'ผลการเรียนกลางภาค ภาคเรียนที่ 1 ปีการศึกษา 2569'),
   ('announce_open', '1');
 
 -- ข้อมูลตัวอย่างสำหรับทดสอบ
