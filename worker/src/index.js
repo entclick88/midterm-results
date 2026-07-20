@@ -48,7 +48,7 @@ export default {
       }
 
       const grades = await env.DB.prepare(
-        `SELECT subject_code, subject_name, credits, midterm_score, max_score, teacher
+        `SELECT subject_code, subject_name, credits, midterm_score, max_score, pending_work, attendance, teacher
          FROM grades WHERE citizen_id = ? ORDER BY subject_code`
       ).bind(cid).all();
 

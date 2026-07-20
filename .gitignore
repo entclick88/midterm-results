@@ -5,4 +5,6 @@ node_modules/
 # ห้าม push ข้อมูลนักเรียนจริงขึ้น GitHub (repo เป็น public)
 import/import.sql
 import/*.csv
+import/*.xlsx
+import/*.xls
 !import/template.csv

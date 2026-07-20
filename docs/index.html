@@ -104,6 +104,19 @@
   .pct.good { color: var(--green); }
   .pct.mid { color: var(--amber); }
   .pct.low { color: var(--red); }
+  .score-cell { white-space: nowrap; font-weight: 600; }
+  .score-cell .max { color: var(--muted); font-weight: 400; }
+  .badge {
+    display: inline-block;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .badge.ok { background: #f0fdf4; color: var(--green); }
+  .badge.warn { background: #fef2f2; color: var(--red); }
+  .badge.wait { background: #f1f5f9; color: var(--muted); font-weight: 400; }
+  .att.low { color: var(--red); font-weight: 600; }
   tfoot td { font-weight: 700; background: #f8fafc; border-top: 2px solid var(--border); }
   .card h2 { font-size: 1.05rem; margin-bottom: 14px; color: var(--primary-dark); }
   .footer-note { text-align: center; font-size: 0.78rem; color: var(--muted); }
@@ -120,6 +133,11 @@
   @media (max-width: 420px) {
     .search-row { flex-direction: column; }
     button { width: 100%; }
+    .card { padding: 16px 12px; }
+    table { font-size: 0.78rem; }
+    th, td { padding: 8px 4px; }
+    .badge { font-size: 0.68rem; padding: 2px 5px; }
+    .subj-code { font-size: 0.68rem; }
   }
 </style>
 </head>
@@ -161,18 +179,20 @@
           <thead>
             <tr>
               <th>รายวิชา</th>
-              <th class="num">เต็ม</th>
-              <th class="num">ได้</th>
+              <th class="num">คะแนน</th>
               <th class="num">ร้อยละ</th>
+              <th class="num">งานค้าง</th>
+              <th class="num">เข้าเรียน</th>
             </tr>
           </thead>
           <tbody id="gradeRows"></tbody>
           <tfoot>
             <tr>
               <td>รวม</td>
-              <td class="num" id="sumMax">0</td>
-              <td class="num" id="sumScore">0</td>
-              <td class="num" id="sumPct">0%</td>
+              <td class="num score-cell" id="sumScore">-</td>
+              <td class="num" id="sumPct">-</td>
+              <td class="num" id="sumPending">-</td>
+              <td></td>
             </tr>
           </tfoot>
         </table>
@@ -226,24 +246,48 @@ async function search() {
     $("stId").textContent = s.student_id || "-";
     $("stClass").textContent = `${s.class || "-"} / เลขที่ ${s.class_no ?? "-"}`;
 
-    let sumScore = 0, sumMax = 0;
+    const fmt = (n) => Number(Number(n).toFixed(2)).toLocaleString("th-TH");
+    let sumScore = 0, sumMax = 0, sumPending = 0;
     $("gradeRows").innerHTML = data.grades.map((g) => {
-      const score = g.midterm_score ?? 0;
-      const max = g.max_score ?? 100;
-      sumScore += score; sumMax += max;
-      const pct = max > 0 ? (score / max) * 100 : 0;
+      const max = g.max_score;
+      const hasScore = g.midterm_score !== null && g.midterm_score !== undefined;
+      const pending = g.pending_work ?? 0;
+      sumPending += pending;
+
+      let scoreCell, pctCell;
+      if (hasScore) {
+        sumScore += g.midterm_score; sumMax += max ?? 0;
+        const pct = max > 0 ? (g.midterm_score / max) * 100 : 0;
+        scoreCell = `<span class="score-cell">${fmt(g.midterm_score)}<span class="max">/${fmt(max)}</span></span>`;
+        pctCell = `<span class="pct ${pctClass(pct)}">${pct.toFixed(1)}%</span>`;
+      } else {
+        scoreCell = `<span class="badge wait">รอคะแนน</span>`;
+        pctCell = "-";
+      }
+
+      const pendingCell = pending > 0
+        ? `<span class="badge warn">${fmt(pending)} ชิ้น</span>`
+        : `<span class="badge ok">ครบ</span>`;
+
+      const att = g.attendance;
+      const attCell = att === null || att === undefined
+        ? "-"
+        : `<span class="att ${att < 0.8 ? "low" : ""}">${(att * 100).toFixed(0)}%</span>`;
+
+      const teacher = g.teacher ? ` · ${g.teacher}` : "";
       return `<tr>
-        <td>${g.subject_name}<div class="subj-code">${g.subject_code || ""}</div></td>
-        <td class="num">${max}</td>
-        <td class="num">${score}</td>
-        <td class="num pct ${pctClass(pct)}">${pct.toFixed(1)}%</td>
+        <td>${g.subject_name}<div class="subj-code">${g.subject_code || ""}${teacher}</div></td>
+        <td class="num">${scoreCell}</td>
+        <td class="num">${pctCell}</td>
+        <td class="num">${pendingCell}</td>
+        <td class="num">${attCell}</td>
       </tr>`;
     }).join("");
 
-    $("sumMax").textContent = sumMax;
-    $("sumScore").textContent = sumScore;
+    $("sumScore").innerHTML = `${fmt(sumScore)}<span class="max">/${fmt(sumMax)}</span>`;
     const totalPct = sumMax > 0 ? (sumScore / sumMax) * 100 : 0;
     $("sumPct").textContent = totalPct.toFixed(1) + "%";
+    $("sumPending").textContent = sumPending > 0 ? fmt(sumPending) + " ชิ้น" : "-";
 
     $("result").style.display = "block";
   } catch (e) {
