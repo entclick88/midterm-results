@@ -8,6 +8,4 @@ database_name = "midterm-results-db"
 database_id = "39cd815e-64a2-4c51-b773-0f69dc34580d"
 
 [vars]
-# เปลี่ยนเป็น URL ของ GitHub Pages เมื่อขึ้น production เพื่อจำกัด origin เช่น
-# ALLOWED_ORIGIN = "https://entclick88.github.io"
-ALLOWED_ORIGIN = "*"
+ALLOWED_ORIGIN = "https://entclick88.github.io"
