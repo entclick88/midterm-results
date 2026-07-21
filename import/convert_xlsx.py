@@ -22,7 +22,7 @@ from datetime import datetime
 
 sys.stdout.reconfigure(encoding="utf-8")
 
-TERM_LABEL = "ผลการเรียนกลางภาค ภาคเรียนที่ 1 ปีการศึกษา 2569"
+TERM_LABEL = "ภาคเรียนที่ 1 ปีการศึกษา 2569"
 PREFIXES = ["เด็กชาย", "เด็กหญิง", "นางสาว", "นาย", "นาง", "ด.ช.", "ด.ญ.", "น.ส."]
 SKIP_NAME_WORDS = ["คะแนน", "เกณฑ์", "ลงชื่อ", "หมายเหตุ", "รวม"]
 
@@ -158,8 +158,9 @@ def parse_sheet(ws):
             c = s["col"]
             nb = lambda v: None if (v is None or (isinstance(v, str) and v.strip() == "")) else v
             full, got, pend, att = nb(r[c]), nb(r[c + 1]), nb(r[c + 2]), nb(r[c + 3])
-            # ช่องคะแนน (ได้) ว่าง = นักเรียนไม่ได้ลงเรียนวิชานี้ → ตัดออก (0 คือคะแนนจริง ไม่ตัด)
-            if got is None or full is None:
+            # ไม่มี %เวลาเรียน = นักเรียนไม่ได้ลงเรียนวิชานี้ → ตัดออก (ต่อให้มีคะแนน 0 ค้างอยู่)
+            # เช่นเดียวกับช่องคะแนนหรือคะแนนเต็มที่ว่าง
+            if att is None or got is None or full is None:
                 continue
             grades.append({
                 "cid": cid, "code": s["code"], "name": s["name"], "credits": s["credits"],

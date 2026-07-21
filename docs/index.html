@@ -92,10 +92,16 @@
   }
   .msg.error { background: #fef2f2; color: var(--red); border: 1px solid #fecaca; }
   #result { display: none; }
-  .student-info { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
-  .student-info .full { grid-column: 1 / -1; }
-  .student-info .k { font-size: 0.78rem; color: var(--muted); }
-  .student-info .v { font-weight: 600; font-size: 1rem; }
+  .student-name { font-weight: 700; font-size: 1.15rem; }
+  .student-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 18px;
+    margin-top: 8px;
+    font-size: 0.95rem;
+    color: var(--muted);
+  }
+  .student-meta b { color: var(--text); font-weight: 600; }
   .table-wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
   th {
@@ -109,7 +115,7 @@
   th.num, td.num { text-align: right; }
   td { padding: 10px 8px; border-bottom: 1px solid var(--border); }
   tr:last-child td { border-bottom: none; }
-  .subj-code { font-size: 0.75rem; color: var(--muted); }
+  .subj-code { color: var(--muted); }
   .pct { font-weight: 700; }
   .pct.good { color: var(--green); }
   .pct.mid { color: var(--amber); }
@@ -127,7 +133,6 @@
   .badge.warn { background: #fef2f2; color: var(--red); }
   .badge.wait { background: #f1f5f9; color: var(--muted); font-weight: 400; }
   .att.low { color: var(--red); font-weight: 600; }
-  tfoot td { font-weight: 700; background: #f8fafc; border-top: 2px solid var(--border); }
   .card h2 { font-size: 1.05rem; margin-bottom: 14px; color: var(--primary-dark); }
   .footer-note { text-align: center; font-size: 0.78rem; color: var(--muted); }
   .spinner {
@@ -147,7 +152,7 @@
     table { font-size: 0.78rem; }
     th, td { padding: 8px 4px; }
     .badge { font-size: 0.68rem; padding: 2px 5px; }
-    .subj-code { font-size: 0.68rem; }
+    .student-meta { font-size: 0.88rem; gap: 4px 12px; }
   }
 </style>
 </head>
@@ -176,11 +181,8 @@
   <div id="result">
     <div class="card">
       <h2>ข้อมูลนักเรียน</h2>
-      <div class="student-info">
-        <div class="full"><div class="k">ชื่อ-นามสกุล</div><div class="v" id="stName">-</div></div>
-        <div><div class="k">เลขประจำตัวนักเรียน</div><div class="v" id="stId">-</div></div>
-        <div><div class="k">ชั้น / เลขที่</div><div class="v" id="stClass">-</div></div>
-      </div>
+      <div class="student-name" id="stName">-</div>
+      <div class="student-meta" id="stMeta">-</div>
     </div>
 
     <div class="card">
@@ -197,15 +199,6 @@
             </tr>
           </thead>
           <tbody id="gradeRows"></tbody>
-          <tfoot>
-            <tr>
-              <td>รวม</td>
-              <td class="num score-cell" id="sumScore">-</td>
-              <td class="num" id="sumPct">-</td>
-              <td class="num" id="sumPending">-</td>
-              <td></td>
-            </tr>
-          </tfoot>
         </table>
       </div>
     </div>
@@ -254,20 +247,20 @@ async function search() {
     $("termLabel").textContent = data.term_label;
     const s = data.student;
     $("stName").textContent = `${s.prefix || ""}${s.first_name} ${s.last_name}`;
-    $("stId").textContent = s.student_id || "-";
-    $("stClass").textContent = `${s.class || "-"} / เลขที่ ${s.class_no ?? "-"}`;
+    const meta = [];
+    if (s.student_id) meta.push(`เลขประจำตัว <b>${s.student_id}</b>`);
+    meta.push(`ชั้น <b>${s.class || "-"}</b>`);
+    meta.push(`เลขที่ <b>${s.class_no ?? "-"}</b>`);
+    $("stMeta").innerHTML = meta.map((m) => `<span>${m}</span>`).join("");
 
     const fmt = (n) => Number(Number(n).toFixed(2)).toLocaleString("th-TH");
-    let sumScore = 0, sumMax = 0, sumPending = 0;
     $("gradeRows").innerHTML = data.grades.map((g) => {
       const max = g.max_score;
       const hasScore = g.midterm_score !== null && g.midterm_score !== undefined;
       const pending = g.pending_work ?? 0;
-      sumPending += pending;
 
       let scoreCell, pctCell;
       if (hasScore) {
-        sumScore += g.midterm_score; sumMax += max ?? 0;
         const pct = max > 0 ? (g.midterm_score / max) * 100 : 0;
         scoreCell = `<span class="score-cell">${fmt(g.midterm_score)}<span class="max">/${fmt(max)}</span></span>`;
         pctCell = `<span class="pct ${pctClass(pct)}">${pct.toFixed(1)}%</span>`;
@@ -285,20 +278,15 @@ async function search() {
         ? "-"
         : `<span class="att ${att < 0.8 ? "low" : ""}">${(att * 100).toFixed(0)}%</span>`;
 
-      const teacher = g.teacher ? ` · ${g.teacher}` : "";
+      const code = g.subject_code ? `<span class="subj-code">${g.subject_code}</span> ` : "";
       return `<tr>
-        <td>${g.subject_name}<div class="subj-code">${g.subject_code || ""}${teacher}</div></td>
+        <td>${code}${g.subject_name}</td>
         <td class="num">${scoreCell}</td>
         <td class="num">${pctCell}</td>
         <td class="num">${pendingCell}</td>
         <td class="num">${attCell}</td>
       </tr>`;
     }).join("");
-
-    $("sumScore").innerHTML = `${fmt(sumScore)}<span class="max">/${fmt(sumMax)}</span>`;
-    const totalPct = sumMax > 0 ? (sumScore / sumMax) * 100 : 0;
-    $("sumPct").textContent = totalPct.toFixed(1) + "%";
-    $("sumPending").textContent = sumPending > 0 ? fmt(sumPending) + " ชิ้น" : "-";
 
     $("result").style.display = "block";
   } catch (e) {
