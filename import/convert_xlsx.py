@@ -152,7 +152,8 @@ def parse_sheet(ws):
 
         for s in subjects:
             c = s["col"]
-            nb = lambda v: None if (v is None or (isinstance(v, str) and v.strip() == "")) else v
+            # "-" (ขีด) และช่องว่าง = ไม่มีข้อมูล → ถือเป็น None
+            nb = lambda v: None if (v is None or (isinstance(v, str) and v.strip() in ("", "-"))) else v
             full, got, pend, att = nb(r[c]), nb(r[c + 1]), nb(r[c + 2]), nb(r[c + 3])
             # ไม่มี %เวลาเรียน = นักเรียนไม่ได้ลงเรียนวิชานี้ → ตัดออก (ต่อให้มีคะแนน 0 ค้างอยู่)
             if att is None or got is None or full is None:
