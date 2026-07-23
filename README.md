@@ -38,6 +38,33 @@ npx wrangler d1 execute midterm-results-db --remote --file=../import/import.sql
 
 ถ้าเลขบัตรยังไม่ครบ/ซ้ำ/ผิด สคริปต์จะรายงานรายคนและไม่สร้าง SQL ให้
 
+รองรับทั้งไฟล์แบบเก่า (2-68: ห้อง/เลขที่/เลขบัตร/ชื่อ) และแบบใหม่ (1-69: รหัสนักเรียน/เลขบัตร/ห้อง/เลขที่/ชื่อ) — ตรวจ layout อัตโนมัติ
+
+## แก้เฉพาะบางชั้น (โหมดบางส่วน)
+
+เมื่อครูส่งคะแนนแก้มาเฉพาะบางชั้น ไม่ต้องนำเข้าใหม่ทั้งฐาน — ใช้ `--only` ระบุชีต (ชั้น) ที่ต้องการ
+ระบบจะ**ลบเฉพาะชั้นนั้นแล้วใส่ทับ** ชั้นอื่นและป้ายภาคเรียนไม่ถูกแตะ
+
+```powershell
+cd import
+python convert_xlsx.py "ไฟล์นำส่งข้อมูล1-69.xlsx" --only M5      # เฉพาะ ม.5
+python convert_xlsx.py "ไฟล์นำส่งข้อมูล1-69.xlsx" --only M5,M6   # ม.5 และ ม.6
+cd ../worker
+npx wrangler d1 execute midterm-results-db --remote --file=../import/import.sql
+```
+
+## แก้ทีละคน / ทีละวิชา (SQL ตรง)
+
+```powershell
+cd worker
+# แก้คะแนน 1 วิชาของนักเรียน 1 คน
+npx wrangler d1 execute midterm-results-db --remote --command="UPDATE grades SET midterm_score=18.5, pending_work=0 WHERE citizen_id='1849902472207' AND subject_code='ค21101'"
+# ลบวิชาที่ใส่ผิด
+npx wrangler d1 execute midterm-results-db --remote --command="DELETE FROM grades WHERE citizen_id='1849902472207' AND subject_code='ค21101'"
+# ดูข้อมูลนักเรียนคนหนึ่ง
+npx wrangler d1 execute midterm-results-db --remote --command="SELECT subject_code, midterm_score, max_score FROM grades WHERE citizen_id='1849902472207'"
+```
+
 ## นำเข้าจาก CSV (ทางเลือก)
 
 1. จัดข้อมูลใน Excel ตามคอลัมน์ใน `import/template.csv` (1 แถว = นักเรียน 1 คน × 1 วิชา)

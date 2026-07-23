@@ -174,9 +174,18 @@ def main():
     path = sys.argv[1]
     wb = openpyxl.load_workbook(path, data_only=True)
 
+    # --only M5,M6  = นำเข้าเฉพาะชั้นที่เลือก (ไม่แตะชั้นอื่น) — โหมดแก้บางส่วน
+    only = None
+    if "--only" in sys.argv:
+        idx = sys.argv.index("--only")
+        only = {s.strip().upper() for s in sys.argv[idx + 1].split(",") if s.strip()}
+    partial = only is not None
+
     all_students, all_grades, all_problems = [], [], []
-    print(f"อ่านไฟล์: {os.path.basename(path)}")
+    print(f"อ่านไฟล์: {os.path.basename(path)}" + (f"  [โหมดบางส่วน: {', '.join(sorted(only))}]" if partial else ""))
     for ws in wb.worksheets:
+        if only is not None and ws.title.upper() not in only:
+            continue
         subjects, students, grades, problems, id_col = parse_sheet(ws)
         all_students += students
         all_grades += grades
@@ -208,22 +217,37 @@ def main():
         print("\n*** ยังไม่สร้าง import.sql — แก้ไขไฟล์ Excel ให้ครบก่อน (dry-run) ***")
         sys.exit(2)
 
+    if not all_students:
+        print("\n*** ไม่พบข้อมูลในชั้นที่เลือก — ตรวจชื่อชีต (M1..M6) อีกครั้ง ***")
+        sys.exit(2)
+
     # สร้าง SQL
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "import.sql")
-    lines = [
-        f"-- สร้างโดย convert_xlsx.py เมื่อ {datetime.now().isoformat()} จาก {os.path.basename(path)}",
-        "DROP TABLE IF EXISTS grades;",
-        "DROP TABLE IF EXISTS students;",
-        """CREATE TABLE students (
+    lines = [f"-- สร้างโดย convert_xlsx.py เมื่อ {datetime.now().isoformat()} จาก {os.path.basename(path)}"]
+
+    if partial:
+        # โหมดบางส่วน: ลบเฉพาะชั้นที่นำเข้าใหม่ แล้วใส่ทับ — ไม่แตะชั้นอื่นและตาราง settings
+        levels = sorted({s["class"].split("/")[0] for s in all_students})
+        lines.append(f"-- โหมดแก้บางส่วน: แทนที่เฉพาะ {', '.join(levels)}")
+        for lv in levels:
+            pat = q(lv + "/%")
+            lines.append(f"DELETE FROM grades WHERE citizen_id IN (SELECT citizen_id FROM students WHERE class LIKE {pat});")
+            lines.append(f"DELETE FROM students WHERE class LIKE {pat};")
+    else:
+        # โหมดเต็ม: ล้างและสร้างใหม่ทั้งหมด
+        lines += [
+            "DROP TABLE IF EXISTS grades;",
+            "DROP TABLE IF EXISTS students;",
+            """CREATE TABLE students (
   citizen_id TEXT PRIMARY KEY, student_id TEXT, prefix TEXT,
   first_name TEXT NOT NULL, last_name TEXT NOT NULL, class TEXT, class_no INTEGER);""",
-        """CREATE TABLE grades (
+            """CREATE TABLE grades (
   id INTEGER PRIMARY KEY AUTOINCREMENT, citizen_id TEXT NOT NULL,
   subject_code TEXT, subject_name TEXT NOT NULL, credits REAL,
   midterm_score REAL, max_score REAL, pending_work REAL, attendance REAL, teacher TEXT);""",
-        "CREATE INDEX idx_grades_cid ON grades(citizen_id);",
-        f"INSERT OR REPLACE INTO settings (key, value) VALUES ('term_label', {q(TERM_LABEL)}), ('announce_open', '1');",
-    ]
+            "CREATE INDEX idx_grades_cid ON grades(citizen_id);",
+            f"INSERT OR REPLACE INTO settings (key, value) VALUES ('term_label', {q(TERM_LABEL)}), ('announce_open', '1');",
+        ]
 
     CHUNK = 200
     st_vals = [f"({q(s['cid'])}, {q(s['student_id'])}, {q(s['prefix'])}, {q(s['first'])}, {q(s['last'])}, {q(s['class'])}, {s['class_no']})" for s in all_students]

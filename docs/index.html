@@ -134,6 +134,17 @@
   .badge.wait { background: #f1f5f9; color: var(--muted); font-weight: 400; }
   .att.low { color: var(--red); font-weight: 600; }
   .card h2 { font-size: 1.05rem; margin-bottom: 14px; color: var(--primary-dark); }
+  .note-card {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 16px;
+    padding: 16px 18px;
+    margin-bottom: 16px;
+  }
+  .note-title { font-weight: 700; color: var(--amber); margin-bottom: 6px; }
+  .note-body { font-size: 0.9rem; color: var(--text); }
+  .note-list { margin: 8px 0 0 1.2rem; font-size: 0.9rem; color: var(--text); }
+  .note-list li { margin-bottom: 4px; }
   .footer-note { text-align: center; font-size: 0.78rem; color: var(--muted); }
   .spinner {
     display: none;
@@ -201,6 +212,16 @@
           <tbody id="gradeRows"></tbody>
         </table>
       </div>
+    </div>
+
+    <div class="note-card">
+      <div class="note-title">หมายเหตุ</div>
+      <div class="note-body">นักเรียนที่มีกรณีดังต่อไปนี้ ให้ติดต่อครูประจำวิชาโดยตรง</div>
+      <ol class="note-list">
+        <li>คะแนนที่ได้ไม่ผ่านเกณฑ์ (ต่ำกว่าร้อยละ 60 ของคะแนนเต็ม)</li>
+        <li>มีงานค้าง</li>
+        <li>การเข้าเรียนไม่ผ่านเกณฑ์ (ต่ำกว่าร้อยละ 80 ของเวลาเรียนทั้งหมด)</li>
+      </ol>
     </div>
   </div>
 
