@@ -49,7 +49,7 @@ export default {
 
       const grades = await env.DB.prepare(
         `SELECT subject_code, subject_name, credits, midterm_score, max_score, pending_work, attendance, teacher
-         FROM grades WHERE citizen_id = ? ORDER BY subject_code`
+         FROM grades WHERE citizen_id = ? ORDER BY seq, id`
       ).bind(cid).all();
 
       return json({

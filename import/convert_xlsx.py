@@ -160,7 +160,7 @@ def parse_sheet(ws):
                 continue
             grades.append({
                 "cid": cid, "code": s["code"], "name": s["name"], "credits": s["credits"],
-                "score": got, "max": full, "pend": pend, "att": att,
+                "score": got, "max": full, "pend": pend, "att": att, "seq": s["col"],
             })
 
     id_msg = chr(65 + col_cid) if col_cid is not None else None
@@ -244,7 +244,7 @@ def main():
             """CREATE TABLE grades (
   id INTEGER PRIMARY KEY AUTOINCREMENT, citizen_id TEXT NOT NULL,
   subject_code TEXT, subject_name TEXT NOT NULL, credits REAL,
-  midterm_score REAL, max_score REAL, pending_work REAL, attendance REAL, teacher TEXT);""",
+  midterm_score REAL, max_score REAL, pending_work REAL, attendance REAL, teacher TEXT, seq INTEGER);""",
             "CREATE INDEX idx_grades_cid ON grades(citizen_id);",
             f"INSERT OR REPLACE INTO settings (key, value) VALUES ('term_label', {q(TERM_LABEL)}), ('announce_open', '1');",
         ]
@@ -254,9 +254,9 @@ def main():
     for i in range(0, len(st_vals), CHUNK):
         lines.append("INSERT INTO students (citizen_id, student_id, prefix, first_name, last_name, class, class_no) VALUES\n" + ",\n".join(st_vals[i:i + CHUNK]) + ";")
 
-    gr_vals = [f"({q(g['cid'])}, {q(g['code'])}, {q(g['name'])}, {num(g['credits'])}, {num(g['score'])}, {num(g['max'])}, {num(g['pend'])}, {num(g['att'])}, NULL)" for g in all_grades]
+    gr_vals = [f"({q(g['cid'])}, {q(g['code'])}, {q(g['name'])}, {num(g['credits'])}, {num(g['score'])}, {num(g['max'])}, {num(g['pend'])}, {num(g['att'])}, NULL, {num(g['seq'])})" for g in all_grades]
     for i in range(0, len(gr_vals), CHUNK):
-        lines.append("INSERT INTO grades (citizen_id, subject_code, subject_name, credits, midterm_score, max_score, pending_work, attendance, teacher) VALUES\n" + ",\n".join(gr_vals[i:i + CHUNK]) + ";")
+        lines.append("INSERT INTO grades (citizen_id, subject_code, subject_name, credits, midterm_score, max_score, pending_work, attendance, teacher, seq) VALUES\n" + ",\n".join(gr_vals[i:i + CHUNK]) + ";")
 
     with open(out, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
