@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-แปลงไฟล์คะแนนกลางภาค (โครงสร้าง "ไฟล์นำส่งข้อมูลเข้าเว็บ") → import.sql สำหรับ D1
+แปลงไฟล์คะแนน (โครงสร้าง "ไฟล์นำส่งข้อมูลเข้าเว็บ") → import.sql สำหรับ D1
 
 วิธีใช้:
     python convert_xlsx.py "ไฟล์คะแนน.xlsx"
 
-โครงสร้างที่คาดหวังต่อชีต (M1..M6):
-    แถว 1: ลงชื่อหัวหน้าหมวด | แถว 2: ลงชื่อผู้สอน | แถว 3: ห้อง เลขที่ ชื่อ-สกุล [เลขบัตร] + รหัสวิชา
-    แถว 4: ชื่อวิชา | แถว 5: หน่วยกิต | แถว 6-7: หัวคอลัมน์ย่อย (เต็ม/ได้/ชิ้น/%)
-    แถว 8+: ข้อมูลนักเรียน — วิชาละ 4 คอลัมน์: เต็ม, ได้, งานค้าง, %เข้าเรียน
+รองรับ 2 โครงสร้าง (ตรวจหัวตารางอัตโนมัติ):
+  แบบใหม่ (1-69): แถว 1 = รหัสนักเรียน | เลขประจำตัวประชาชน | ห้อง | เลขที่ | ชื่อ-สกุล | รหัสวิชา...
+  แบบเก่า (2-68): แถว 3 = ห้อง | เลขที่ | เลขประจำตัวประชาชน | ชื่อ-สกุล | รหัสวิชา...
+แต่ละวิชากว้าง 4 คอลัมน์: คะแนนเต็ม, คะแนนที่ได้, งานค้าง(ชิ้น), %เข้าเรียน
 
-คอลัมน์เลขบัตรประชาชน: ตรวจหาอัตโนมัติจากหัวตาราง (มีคำว่า บัตร/ปชช/ประชาชน)
-หรือจากข้อมูลที่เป็นตัวเลข 13 หลัก — แทรกไว้คอลัมน์ไหนก็ได้ก่อนรหัสวิชาแรก
-ถ้าไม่พบ จะรันแบบตรวจสอบ (dry-run) รายงานสรุปอย่างเดียว ไม่สร้าง SQL
+เลขบัตร ปชช. รองรับรูปแบบมีขีด (1-8499-02472-20-7) — ต้องกรอกครบทุกคน
+กติกา: ไม่มี %เวลาเรียน = นักเรียนไม่ได้ลงเรียนวิชานั้น → ตัดวิชาออก
+ถ้าเลขบัตรไม่ครบ/ซ้ำ จะรันแบบตรวจสอบ (dry-run) รายงานอย่างเดียว ไม่สร้าง SQL
 """
 import openpyxl
 import re
@@ -43,19 +43,6 @@ def num(v):
         return "NULL"
 
 
-def clean_teacher(v):
-    """ตัดวันที่/วงเล็บท้ายชื่อครูออก เช่น 'ศิวพงศ์ สุชาติ (09/01/2026)' → 'ศิวพงศ์ สุชาติ'
-    ช่องลงชื่อที่เป็นสถานะ (เช่น 'ยังไม่เรียบร้อย') ไม่ใช่ชื่อครู → คืน None"""
-    if not v:
-        return None
-    s = re.sub(r"\(.*?\)", " ", str(v))
-    s = re.sub(r"[\d/.\-]+", " ", s)
-    s = re.sub(r"\s+", " ", s).strip()
-    if not s or re.search(r"ยังไม่|ไม่เรียบร้อย|รอ(ส่ง|ตรวจ)|ค้าง", s):
-        return None
-    return s
-
-
 def split_prefix(fullname):
     name = re.sub(r"\s+", " ", str(fullname)).strip()
     for p in PREFIXES:
@@ -68,7 +55,7 @@ def split_prefix(fullname):
 
 
 def cid_of(v):
-    """คืนเลข 13 หลักถ้าค่านี้เป็นเลขบัตรประชาชน ไม่ใช่คืน None (รองรับ float จาก Excel)"""
+    """คืนเลข 13 หลักถ้าค่านี้เป็นเลขบัตรประชาชน ไม่ใช่คืน None (รองรับ float + ขีดคั่น)"""
     if v is None:
         return None
     if isinstance(v, float) and v == int(v):
@@ -77,79 +64,88 @@ def cid_of(v):
     return s if re.fullmatch(r"\d{13}", s) else None
 
 
+def id_str(v):
+    """1.0 → '1', '2955.0' → '2955', เว้นว่าง → None"""
+    if v is None:
+        return None
+    if isinstance(v, float) and v == int(v):
+        return str(int(v))
+    s = str(v).strip()
+    if s.endswith(".0"):
+        s = s[:-2]
+    return s or None
+
+
 def parse_sheet(ws):
     rows = list(ws.iter_rows(values_only=True))
     grade_level = "ม." + ws.title.lstrip("Mm")  # M1 → ม.1
-    code_row, name_row, cred_row, teacher_row = rows[2], rows[3], rows[4], rows[1]
 
-    # หาคอลัมน์รหัสวิชา (แถว 3 มีค่า และไม่ใช่ 3 คอลัมน์แรกๆ ที่เป็น ห้อง/เลขที่/ชื่อ/เลขบัตร)
-    base_headers = {"ห้อง", "เลขที่", "ชื่อ - สกุล", "ชื่อ-สกุล", "ชื่อ – สกุล"}
-    subj_cols, id_col_by_header = [], None
+    # หาแถวหัวตาราง (มี 'ห้อง' หรือ 'ชื่อ...สกุล') — รองรับไฟล์เก่า (แถว 3) และใหม่ (แถว 1)
+    header_idx = None
+    for i, r in enumerate(rows[:8]):
+        cells = [str(c).strip() if c is not None else "" for c in r]
+        if "ห้อง" in cells or any("ชื่อ" in c and "สกุล" in c for c in cells):
+            header_idx = i
+            break
+    if header_idx is None:
+        header_idx = 2
+    code_row = rows[header_idx]
+    name_row = rows[header_idx + 1]
+    cred_row = rows[header_idx + 2]
+
+    # ระบุคอลัมน์พื้นฐานจากป้ายหัวตาราง + คอลัมน์วิชาแรก
+    col_sid = col_cid = col_room = col_no = col_name = None
+    first_subj = None
     for c, v in enumerate(code_row):
         if v is None or str(v).strip() == "":
             continue
         h = str(v).strip()
-        if h in base_headers:
-            continue
-        if re.search(r"บัตร|ปชช|ประชาชน", h):
-            id_col_by_header = c
-            continue
-        subj_cols.append(c)
-    first_subj = subj_cols[0]
+        if re.search(r"รหัสนักเรียน|รหัสนร", h):
+            col_sid = c
+        elif re.search(r"บัตร|ปชช|ประชาชน", h):
+            col_cid = c
+        elif h == "ห้อง":
+            col_room = c
+        elif h == "เลขที่":
+            col_no = c
+        elif "ชื่อ" in h and "สกุล" in h:
+            col_name = c
+        elif first_subj is None:
+            first_subj = c
 
     subjects = []
-    for c in subj_cols:
-        subjects.append({
-            "col": c,
-            "code": str(code_row[c]).strip(),
-            "name": str(name_row[c]).strip() if name_row[c] else str(code_row[c]).strip(),
-            "credits": cred_row[c],
-            "teacher": clean_teacher(teacher_row[c] if c < len(teacher_row) else None),
-        })
-
-    # หา/ยืนยันคอลัมน์เลขบัตร: จากหัวตาราง หรือจากข้อมูลจริง (คอลัมน์ก่อนวิชาแรกที่เป็นเลข 13 หลัก)
-    data_rows = []
-    for i in range(7, len(rows)):
-        r = rows[i]
-        if r[0] is None or str(r[0]).strip() in ("", "ห้อง"):
-            continue
-        # หาชื่อ: คอลัมน์ 2 หรือ 3 (เผื่อแทรกเลขบัตรก่อนชื่อ)
-        data_rows.append((i + 1, r))
-
-    id_col = id_col_by_header
-    if id_col is None:
-        for c in range(0, first_subj):
-            hits = sum(1 for _, r in data_rows[:30] if cid_of(r[c]))
-            if hits >= max(3, len(data_rows[:30]) // 2):
-                id_col = c
-                break
+    for c in range(first_subj, len(code_row)):
+        code = code_row[c]
+        if code is not None and str(code).strip():
+            subjects.append({
+                "col": c,
+                "code": str(code).strip(),
+                "name": str(name_row[c]).strip() if name_row[c] else str(code).strip(),
+                "credits": cred_row[c],
+            })
 
     students, grades, problems = [], [], []
-    for rowno, r in data_rows:
-        # ชื่ออยู่คอลัมน์ไหน: คอลัมน์แรกในช่วง 2..first_subj ที่เป็นข้อความไทยยาวๆ และไม่ใช่เลขบัตร
-        name_val = None
-        for c in range(2, first_subj):
-            if c == id_col:
-                continue
-            v = r[c]
-            if v is not None and not cid_of(v) and re.search(r"[ก-๙]", str(v)):
-                name_val = str(v).strip()
-                break
-        if not name_val:
-            continue
+    for i in range(header_idx + 3, len(rows)):
+        r = rows[i]
+        rowno = i + 1
+        name_val = r[col_name] if col_name is not None else None
+        if name_val is None or not re.search(r"[ก-๙]", str(name_val)):
+            continue  # ข้ามแถวหัวย่อย (คะแนนเก็บ/เต็ม/ได้) และแถวว่าง
+        name_val = re.sub(r"\s+", " ", str(name_val)).strip()
         if any(w in name_val for w in SKIP_NAME_WORDS):
             continue  # แถวสรุป/หมายเหตุ ไม่ใช่นักเรียน
 
-        room = str(r[0]).strip()
-        room = room[:-2] if room.endswith(".0") else room
-        class_no = num(r[1])
-        cid = cid_of(r[id_col]) if id_col is not None else None
-        if id_col is not None and cid is None:
-            problems.append(f"{ws.title} แถว {rowno}: {name_val} — เลขบัตรไม่ถูกต้อง ({r[id_col]})")
+        room = id_str(r[col_room]) if col_room is not None else ""
+        class_no = num(r[col_no]) if col_no is not None else "NULL"
+        cid = cid_of(r[col_cid]) if col_cid is not None else None
+        student_id = id_str(r[col_sid]) if col_sid is not None else None
+        if col_cid is not None and cid is None:
+            problems.append(f"{ws.title} แถว {rowno}: {name_val} — เลขบัตรไม่ถูกต้อง ({r[col_cid]})")
 
         prefix, first, last = split_prefix(name_val)
         students.append({
-            "cid": cid, "prefix": prefix, "first": first, "last": last,
+            "cid": cid, "student_id": student_id,
+            "prefix": prefix, "first": first, "last": last,
             "class": f"{grade_level}/{room}", "class_no": class_no,
             "sheet": ws.title, "row": rowno, "name": name_val,
         })
@@ -159,15 +155,15 @@ def parse_sheet(ws):
             nb = lambda v: None if (v is None or (isinstance(v, str) and v.strip() == "")) else v
             full, got, pend, att = nb(r[c]), nb(r[c + 1]), nb(r[c + 2]), nb(r[c + 3])
             # ไม่มี %เวลาเรียน = นักเรียนไม่ได้ลงเรียนวิชานี้ → ตัดออก (ต่อให้มีคะแนน 0 ค้างอยู่)
-            # เช่นเดียวกับช่องคะแนนหรือคะแนนเต็มที่ว่าง
             if att is None or got is None or full is None:
                 continue
             grades.append({
                 "cid": cid, "code": s["code"], "name": s["name"], "credits": s["credits"],
-                "score": got, "max": full, "pend": pend, "att": att, "teacher": s["teacher"],
+                "score": got, "max": full, "pend": pend, "att": att,
             })
 
-    return subjects, students, grades, problems, id_col
+    id_msg = chr(65 + col_cid) if col_cid is not None else None
+    return subjects, students, grades, problems, id_msg
 
 
 def main():
@@ -184,8 +180,9 @@ def main():
         all_students += students
         all_grades += grades
         all_problems += problems
-        id_msg = f"เลขบัตรคอลัมน์ {chr(65 + id_col)}" if id_col is not None else "*** ไม่พบคอลัมน์เลขบัตร ***"
-        print(f"  {ws.title}: นักเรียน {len(students)} คน, {len(subjects)} วิชา, {len(grades)} รายการคะแนน | {id_msg}")
+        id_msg = f"เลขบัตรคอลัมน์ {id_col}" if id_col else "*** ไม่พบคอลัมน์เลขบัตร ***"
+        has_sid = "มีรหัสนักเรียน" if students and students[0]["student_id"] else "ไม่มีรหัสนักเรียน"
+        print(f"  {ws.title}: นักเรียน {len(students)} คน, {len(subjects)} วิชา, {len(grades)} รายการคะแนน | {id_msg} | {has_sid}")
 
     # ตรวจเลขบัตรซ้ำ
     seen = {}
@@ -228,11 +225,11 @@ def main():
     ]
 
     CHUNK = 200
-    st_vals = [f"({q(s['cid'])}, NULL, {q(s['prefix'])}, {q(s['first'])}, {q(s['last'])}, {q(s['class'])}, {s['class_no']})" for s in all_students]
+    st_vals = [f"({q(s['cid'])}, {q(s['student_id'])}, {q(s['prefix'])}, {q(s['first'])}, {q(s['last'])}, {q(s['class'])}, {s['class_no']})" for s in all_students]
     for i in range(0, len(st_vals), CHUNK):
         lines.append("INSERT INTO students (citizen_id, student_id, prefix, first_name, last_name, class, class_no) VALUES\n" + ",\n".join(st_vals[i:i + CHUNK]) + ";")
 
-    gr_vals = [f"({q(g['cid'])}, {q(g['code'])}, {q(g['name'])}, {num(g['credits'])}, {num(g['score'])}, {num(g['max'])}, {num(g['pend'])}, {num(g['att'])}, {q(g['teacher'])})" for g in all_grades]
+    gr_vals = [f"({q(g['cid'])}, {q(g['code'])}, {q(g['name'])}, {num(g['credits'])}, {num(g['score'])}, {num(g['max'])}, {num(g['pend'])}, {num(g['att'])}, NULL)" for g in all_grades]
     for i in range(0, len(gr_vals), CHUNK):
         lines.append("INSERT INTO grades (citizen_id, subject_code, subject_name, credits, midterm_score, max_score, pending_work, attendance, teacher) VALUES\n" + ",\n".join(gr_vals[i:i + CHUNK]) + ";")
 
